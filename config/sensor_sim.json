@@ -6,5 +6,7 @@
   "height": 480,
   "fps": 15,
   "heartbeat_interval_ms": 200,
-  "sndhwm": 8
+  "sndhwm": 8,
+  // Log frame generation/publish timing this often (0 = only at exit).
+  "stats_interval_s": 10
 }

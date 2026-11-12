@@ -7,6 +7,8 @@
   "heartbeat_interval_ms": 200,
   "tick_hz": 50,
   "initial_speed": 0.5,
+  // Belt speed at which items pass every item_period_s (fixes the item spacing).
+  "nominal_speed": 0.5,
   "max_speed": 2.0,
   "ramp_per_s": 1.0,
   "item_period_s": 2.0,
