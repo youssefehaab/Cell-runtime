@@ -1,0 +1,28 @@
+# Keep the build context small and the layer cache stable.
+.git
+.github
+.claude
+.venv
+**/.venv
+build
+build*/
+cmake-build-*/
+compile_commands.json
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+python/*.egg-info
+python/build
+python/dist
+# Regenerated inside the image with the image's protoc.
+python/cell_proto/*_pb2.py
+docs
+*.md
+*.log
+.vscode
+.idea
+# From deploy/ only the Dockerfile's own helpers are needed.
+deploy/*
+!deploy/docker
