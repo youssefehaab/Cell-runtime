@@ -1,0 +1,12 @@
+# ThreadSanitizer suppressions for cell-runtime.
+#
+# The distro libzmq is not built with TSan, so TSan cannot see the lock-free
+# pipes and mailboxes libzmq uses to hand sockets and message buffers between
+# an application thread and its internal "ZMQbg/IO" threads. Every report this
+# file hides has one side inside libzmq.so (verified on the broker under load:
+# epoll_ctl/socket bookkeeping and memcpy of message bodies on ZMQbg threads).
+#
+# Scope is deliberately limited to libzmq: a race between two of our own
+# threads never has a libzmq frame as the racing access and is still reported.
+called_from_lib:libzmq.so
+race:libzmq.so

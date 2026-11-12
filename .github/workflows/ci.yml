@@ -21,7 +21,7 @@ env:
   # set for every job; that also covers binaries launched by the integration tests.
   ASAN_OPTIONS: detect_leaks=1:strict_string_checks=1:detect_stack_use_after_return=1:check_initialization_order=1
   UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
-  TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1:history_size=4
+  TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1:history_size=4:suppressions=${{ github.workspace }}/tests/tsan.supp
 
 jobs:
   format:
@@ -90,6 +90,7 @@ jobs:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_MAXSIZE: 400M
       CELL_BIN_DIR: ${{ github.workspace }}/build/bin
+      CELL_TEST_LOG_DIR: ${{ github.workspace }}/build/test-logs
     steps:
       - uses: actions/checkout@v4
 
