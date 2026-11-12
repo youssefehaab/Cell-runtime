@@ -1,0 +1,13 @@
+{
+  "log_level": "info",
+  "telemetry_endpoint": "ipc:///tmp/cell/arm.telemetry",
+  "cmd_endpoint": "ipc:///tmp/cell/arm.cmd",
+  "rate_hz": 1000,
+  "heartbeat_interval_ms": 200,
+  "joints": 6,
+  "home": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+  "joint_limit_rad": 3.14159,
+  "max_velocity": 1.5,
+  "max_acceleration": 4.0,
+  "estop_deceleration": 20.0
+}

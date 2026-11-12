@@ -1,0 +1,27 @@
+{
+  "log_level": "info",
+  "host": "0.0.0.0",
+  "port": 5020,
+  "unit_id": 1,
+  "tick_hz": 50,
+  "initial_speed": 0.5,
+  "max_speed": 2.0,
+  "ramp_per_s": 1.0,
+  "item_period_s": 2.0,
+  "item_duty": 0.3,
+  // Modbus map. Speeds are fixed-point: register = m/s * speed_scale.
+  //   input register  ir_speed_actual   conveyor speed
+  //   input register  ir_fault_code     0 = healthy
+  //   discrete input  di_item_present   photo-eye
+  //   holding reg.    hr_speed_setpoint commanded speed
+  //   holding reg.    hr_sim_outage_ms  fault injection: write N to drop off the
+  //                                     network for N ms (65535 = until restart)
+  "registers": {
+    "speed_scale": 1000,
+    "ir_speed_actual": 0,
+    "ir_fault_code": 1,
+    "di_item_present": 0,
+    "hr_speed_setpoint": 0,
+    "hr_sim_outage_ms": 10
+  }
+}

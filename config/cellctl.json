@@ -1,0 +1,6 @@
+{
+  "broker_sub": "tcp://127.0.0.1:5556",
+  "broker_cmd": "tcp://127.0.0.1:5557",
+  "command_timeout_ms": 2000,
+  "health_timeout_ms": 3000
+}

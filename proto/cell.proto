@@ -1,0 +1,162 @@
+// Wire contract for every message in the cell.
+//
+// Rules:
+//  * Every top-level message carries a Header as field 1. The broker relies on
+//    this to read the header without decoding the (possibly multi-megabyte) body.
+//  * Field numbers are never reused or renumbered.
+syntax = "proto3";
+
+package cell;
+
+// ---------------------------------------------------------------- common ---
+
+message Header {
+  uint64 seq = 1;           // per-source, per-stream, starts at 0, +1 per message
+  uint64 send_mono_ns = 2;  // CLOCK_MONOTONIC at send time (same-host latency)
+  string source = 3;        // process name, e.g. "arm_sim"
+}
+
+enum ProcessStatus {
+  PROCESS_STATUS_UNSPECIFIED = 0;
+  PROCESS_STARTING = 1;
+  PROCESS_OK = 2;
+  PROCESS_DEGRADED = 3;  // running but impaired (e.g. plc_bridge reconnecting)
+  PROCESS_FAULT = 4;
+  PROCESS_STOPPING = 5;
+}
+
+message Heartbeat {
+  Header h = 1;
+  ProcessStatus status = 2;
+  uint64 uptime_ms = 3;
+  string detail = 4;  // optional human-readable reason for DEGRADED/FAULT
+}
+
+// ------------------------------------------------------------- telemetry ---
+
+enum ArmMode {
+  ARM_MODE_UNSPECIFIED = 0;
+  ARM_IDLE = 1;
+  ARM_MOVING = 2;
+  ARM_STOPPING = 3;  // decelerating after Stop
+  ARM_ESTOP = 4;     // latched until Reset
+}
+
+message JointState {
+  Header h = 1;
+  repeated double position = 2;  // rad
+  repeated double velocity = 3;  // rad/s
+  ArmMode mode = 4;
+}
+
+message PointCloudFrame {
+  Header h = 1;
+  uint32 width = 2;
+  uint32 height = 3;
+  bytes points = 4;  // width*height packed little-endian float32 xyz triples
+}
+
+message ConveyorState {
+  Header h = 1;
+  float speed = 2;  // m/s
+  bool item_present = 3;
+  uint32 fault_code = 4;  // 0 = no fault
+  bool link_up = 5;       // false while plc_bridge has no Modbus connection
+}
+
+// -------------------------------------------------------------- commands ---
+
+message MoveTo {
+  repeated double joints = 1;  // target joint positions, rad
+}
+message Stop {}
+message EStop {}
+message Reset {}
+message SetConveyorSpeed {
+  float speed = 1;  // m/s
+}
+
+// Fault injection for diagnostics and tests. Handled by the simulators:
+//   target "sensor": stop publishing frames for duration_ms
+//   target "plc":    plc_bridge asks plc_sim to drop off the network for duration_ms
+message FaultInject {
+  enum Kind {
+    KIND_UNSPECIFIED = 0;
+    DISCONNECT = 1;
+    RECONNECT = 2;  // end an active fault early
+  }
+  Kind kind = 1;
+  uint32 duration_ms = 2;  // 0 = until RECONNECT
+}
+
+message Command {
+  Header h = 1;
+  string target = 2;  // "arm" | "sensor" | "plc"
+  oneof action {
+    MoveTo move_to = 10;
+    Stop stop = 11;
+    EStop estop = 12;
+    Reset reset = 13;
+    SetConveyorSpeed set_conveyor_speed = 14;
+    FaultInject fault_inject = 15;
+  }
+}
+
+message CommandReply {
+  Header h = 1;
+  bool ok = 2;
+  string error = 3;
+}
+
+// ------------------------------------------------------ broker → consumers ---
+
+message StreamStats {
+  string stream = 1;  // topic name, e.g. "arm.joint"
+  uint64 count = 2;   // messages received in this window
+  double rate_hz = 3;
+  uint64 seq_gaps = 4;      // missing sequence numbers in this window
+  uint64 drops = 5;         // messages dropped at the broker ring in this window
+  uint64 p50_ns = 6;
+  uint64 p99_ns = 7;
+  uint64 p999_ns = 8;
+  uint64 max_ns = 9;
+  uint64 total_count = 10;  // since broker start
+  uint64 total_seq_gaps = 11;
+  uint64 total_drops = 12;
+  uint64 bytes = 13;  // payload bytes in this window
+}
+
+message CellStats {
+  Header h = 1;
+  repeated StreamStats streams = 2;
+  uint64 window_ms = 3;
+  uint64 ring_capacity = 4;
+  uint64 ring_high_water = 5;  // max occupancy seen in this window
+}
+
+message ProcessHealth {
+  string name = 1;
+  ProcessStatus status = 2;
+  uint64 uptime_ms = 3;
+  uint64 last_seen_age_ms = 4;  // time since last heartbeat
+  bool alive = 5;               // heartbeat seen within the timeout
+  string detail = 6;
+}
+
+// Sensor frame metadata: consumers on tcp get this instead of the raw cloud.
+message FrameInfo {
+  Header h = 1;  // header of the original frame
+  uint32 width = 2;
+  uint32 height = 3;
+  uint64 bytes = 4;
+}
+
+// Aggregated cell snapshot, published at the downsample rate.
+message CellState {
+  Header h = 1;
+  JointState arm = 2;
+  ConveyorState conveyor = 3;
+  FrameInfo sensor = 4;
+  repeated ProcessHealth processes = 5;  // includes the broker itself
+  bool healthy = 6;                      // all expected processes alive and OK
+}

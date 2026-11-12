@@ -1,0 +1,10 @@
+{
+  "log_level": "info",
+  "frames_endpoint": "ipc:///tmp/cell/sensor.frames",
+  "cmd_endpoint": "ipc:///tmp/cell/sensor.cmd",
+  "width": 640,
+  "height": 480,
+  "fps": 15,
+  "heartbeat_interval_ms": 200,
+  "sndhwm": 8
+}

@@ -1,0 +1,24 @@
+{
+  "log_level": "info",
+  "pub_endpoint": "tcp://*:5556",
+  "cmd_endpoint": "tcp://*:5557",
+  "ring_capacity": 65536,
+  "downsample_hz": 50,
+  "stats_interval_ms": 1000,
+  "heartbeat_interval_ms": 200,
+  "heartbeat_timeout_ms": 1000,
+  "command_timeout_ms": 500,
+  "sub_rcvhwm": 10000,
+  // Device telemetry sockets. Each also carries that process's "hb" topic.
+  "streams": [
+    {"topic": "arm.joint", "endpoint": "ipc:///tmp/cell/arm.telemetry", "process": "arm_sim"},
+    {"topic": "sensor.frame", "endpoint": "ipc:///tmp/cell/sensor.frames", "process": "sensor_sim"},
+    {"topic": "plc.conveyor", "endpoint": "ipc:///tmp/cell/plc.telemetry", "process": "plc_bridge"}
+  ],
+  // Command.target -> device REP endpoint.
+  "routes": {
+    "arm": "ipc:///tmp/cell/arm.cmd",
+    "sensor": "ipc:///tmp/cell/sensor.cmd",
+    "plc": "ipc:///tmp/cell/plc.cmd"
+  }
+}

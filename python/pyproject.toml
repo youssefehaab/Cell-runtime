@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cell-runtime-tools"
+version = "0.1.0"
+description = "Python tooling for cell-runtime: cellctl diagnostics CLI and the simulated PLC"
+requires-python = ">=3.11"
+dependencies = [
+  "pyzmq>=25",
+  "protobuf>=4.21,<6",
+  "rich>=13",
+  "typer>=0.12",
+  "pymodbus>=3.6,<3.9",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[project.scripts]
+cellctl = "cellctl.__main__:main"
+plc-sim = "plc_sim.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["cellctl*", "plc_sim*", "cell_proto*"]
+
+[tool.pytest.ini_options]
+testpaths = ["../tests/integration"]

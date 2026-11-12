@@ -1,0 +1,8 @@
+build*/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+python/cell_proto/*_pb2.py
+python/*.egg-info/
+compile_commands.json

@@ -1,0 +1,28 @@
+{
+  "log_level": "info",
+  "telemetry_endpoint": "ipc:///tmp/cell/plc.telemetry",
+  "cmd_endpoint": "ipc:///tmp/cell/plc.cmd",
+  "poll_hz": 100,
+  "heartbeat_interval_ms": 200,
+  "modbus": {
+    "host": "127.0.0.1",
+    "port": 5020,
+    "unit_id": 1,
+    "response_timeout_ms": 200
+  },
+  "backoff": {
+    "initial_ms": 100,
+    "max_ms": 5000,
+    "multiplier": 2.0,
+    "jitter": 0.2
+  },
+  // Modbus map shared with plc_sim (see config/plc_sim.json).
+  "registers": {
+    "speed_scale": 1000,
+    "ir_speed_actual": 0,
+    "ir_fault_code": 1,
+    "di_item_present": 0,
+    "hr_speed_setpoint": 0,
+    "hr_sim_outage_ms": 10
+  }
+}
