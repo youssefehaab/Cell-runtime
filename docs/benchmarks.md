@@ -77,6 +77,15 @@ p50/p99/p999 are the median across windows; "worst" is the worst single window.
 | `LatencyHistogram::percentile(50)` | 92 ns | — |
 | `LatencyHistogram::percentile(99.9)` | 128 ns | — |
 
+Palletising (`src/algo/`), random box mixes on a 1.2 × 0.8 × 1.8 m pallet:
+
+| Benchmark | Time | Result |
+|---|---:|---|
+| AABB intersection test | 2.3 ns | — |
+| Pack 10 boxes | 1.8 µs | 10 placed |
+| Pack 50 boxes | 63 µs | 37 placed, 51.6 % fill |
+| Pack 200 boxes | 1.1 ms | 57 placed, 57.0 % fill |
+
 The two-thread ring figure is a throughput number: both sides yield when the
 ring is full or empty, so items move in batches. It is not a per-item hand-off
 latency.

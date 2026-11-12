@@ -92,8 +92,8 @@ sudo apt-get install -y build-essential cmake ninja-build pkg-config git \
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build
 python3 -m venv .venv && .venv/bin/pip install -r python/requirements.txt
 
-ctest --test-dir build --output-on-failure                       # 198 unit tests
-PYTHONPATH=python .venv/bin/python -m pytest tests/integration   # 26 integration tests
+ctest --test-dir build --output-on-failure                       # 213 unit tests
+PYTHONPATH=python .venv/bin/python -m pytest tests/integration   # 29 integration tests
 
 PYTHONPATH=python .venv/bin/python -m cellctl up                 # run the cell locally
 PYTHONPATH=python .venv/bin/python -m cellctl status             # in another terminal
@@ -146,6 +146,23 @@ sudo deploy/scripts/install.sh /tmp/stage --venv --units # first install
 sudo deploy/scripts/upgrade.sh /tmp/stage-next           # exit 0 upgraded, 3 rolled back
 ```
 
+## Palletising algorithms
+
+`src/algo/` holds a greedy pallet-packing heuristic and an axis-aligned
+bounding-box collision check, independent of the runtime, with Python bindings
+(pybind11). Boxes are placed sturdiest-first at the lowest free corner, subject
+to pallet bounds, no collisions, a minimum supported footprint, the pallet
+weight limit, and per-box stacking limits with load propagated down the stack.
+An independent validator checks every result; a property test runs it over 200
+random box sets.
+
+```
+PYTHONPATH=build/python python python/demos/pallet_demo.py --boxes 40   # draws each layer
+```
+
+The demo's default mix packs 33 of 40 boxes at 90.6 % volume fill. Packing 50
+boxes takes 63 µs and 200 boxes 1.1 ms; an AABB check takes 2.3 ns.
+
 ## Design decisions
 
 Why ipc inside the cell and tcp at the edge, how the ring buffer's memory
@@ -159,7 +176,9 @@ safe, and what would change for real hardware:
 proto/cell.proto      wire contract for every message
 src/common/           ring buffer, histogram, config, logging, signals, zmq helpers
 src/{arm_sim,sensor_sim,plc_bridge,broker}/
+src/algo/             pallet packing + AABB collision, pybind11 bindings
 python/{cellctl,plc_sim}/
+python/demos/         pallet packing visualisation
 tests/unit/           GoogleTest
 tests/integration/    pytest, launches the real processes
 bench/                Google Benchmark + end-to-end latency benchmark
