@@ -1,0 +1,66 @@
+# The whole cell on one host:
+#   docker compose -f deploy/docker-compose.yml up -d --build --wait
+#   docker compose -f deploy/docker-compose.yml exec broker cellctl status
+#   docker compose -f deploy/docker-compose.yml down -v
+#
+# All services run the same image. Device <-> broker traffic uses ipc:// sockets
+# on the shared `cell-ipc` volume (lowest latency; the containers share the host
+# kernel and therefore CLOCK_MONOTONIC, which keeps the latency measurement
+# valid). Consumers reach the broker over tcp on the published ports.
+name: cell-runtime
+
+x-cell: &cell
+  image: cell-runtime:${CELL_VERSION:-local}
+  build:
+    context: ..
+    dockerfile: deploy/docker/Dockerfile
+    target: runtime
+  restart: on-failure        # a crashed or killed process is restarted
+  stop_grace_period: 5s
+  volumes:
+    - cell-ipc:/tmp/cell
+  networks: [cell]
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+
+services:
+  plc-sim:
+    <<: *cell
+    command: ["plc-sim"]
+
+  arm-sim:
+    <<: *cell
+    command: ["arm_sim"]
+
+  sensor-sim:
+    <<: *cell
+    command: ["sensor_sim"]
+
+  plc-bridge:
+    <<: *cell
+    # The PLC is another container here, not localhost. No depends_on health
+    # gate: the bridge reconnects with backoff whenever the PLC appears.
+    command: ["plc_bridge", "--set", "modbus.host=plc-sim"]
+    depends_on: [plc-sim]
+
+  broker:
+    <<: *cell
+    command: ["broker"]
+    depends_on: [arm-sim, sensor-sim, plc-bridge]
+    ports:
+      - "${CELL_PUB_PORT:-5556}:5556"   # telemetry (XPUB)
+      - "${CELL_CMD_PORT:-5557}:5557"   # commands (ROUTER)
+    healthcheck:
+      # Healthy = every process of the cell is alive and OK, as seen by the broker.
+      test: ["CMD", "cellctl", "health", "--timeout-ms", "2000"]
+      interval: 5s
+      timeout: 4s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  cell-ipc:
+
+networks:
+  cell:

@@ -207,13 +207,33 @@ def kill_systemd(process: str, echo: Echo) -> KillResult:
 
 
 def kill_docker(process: str, compose_file: Path, echo: Echo) -> KillResult:
+    """SIGKILL the container's main process from the host.
+
+    `docker compose kill` is deliberately not used: Docker treats it as an
+    operator stop and does not apply the restart policy, so it would not
+    exercise recovery. Killing the host PID looks like a real crash.
+    """
     service = service_name(process)
-    result = _run(["docker", "compose", "-f", str(compose_file), "kill", "-s", "SIGKILL",
-                   service], echo)
-    if result.returncode != 0:
-        raise CellctlError(f"docker compose kill {service} failed (exit {result.returncode}): "
-                           f"{result.stderr.strip() or 'no output'}")
-    return KillResult("docker", f"sent SIGKILL to compose service {service} ({compose_file})")
+    compose = ["docker", "compose", "-f", str(compose_file)]
+    ps = _run([*compose, "ps", "-q", service], echo)
+    container = ps.stdout.strip().splitlines()[0] if ps.stdout.strip() else ""
+    if ps.returncode != 0 or not container:
+        raise CellctlError(f"compose service {service} is not running ({compose_file}): "
+                           f"{ps.stderr.strip() or 'no container'}")
+    inspect = _run(["docker", "inspect", "-f", "{{.State.Pid}}", container], echo)
+    pid_text = inspect.stdout.strip()
+    if inspect.returncode != 0 or not pid_text.isdigit() or int(pid_text) <= 0:
+        raise CellctlError(f"cannot find the host PID of {service}: "
+                           f"{inspect.stderr.strip() or pid_text or 'no output'}")
+    pid = int(pid_text)
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except PermissionError as exc:
+        raise CellctlError(f"not permitted to kill pid {pid} of {service}; run as root") from exc
+    except ProcessLookupError as exc:
+        raise CellctlError(f"{service} (pid {pid}) exited before it could be killed") from exc
+    return KillResult("docker", f"sent SIGKILL to compose service {service} "
+                                f"(host pid {pid}, container {container[:12]})")
 
 
 # ---------------------------------------------------------------------- logs ---

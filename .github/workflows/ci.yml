@@ -226,10 +226,24 @@ jobs:
             done
           '
 
-      # ---------------------------------------------------------------------------
-      # TODO(phase-5, next round): compose smoke test goes here.
-      #   docker compose -f deploy/docker-compose.yml up -d --wait
-      #   docker compose -f deploy/docker-compose.yml exec -T broker cellctl health --json
-      #   docker compose -f deploy/docker-compose.yml logs  (on failure, upload as artifact)
-      #   docker compose -f deploy/docker-compose.yml down -v
-      # ---------------------------------------------------------------------------
+      - name: Compose smoke test (full cell, command, crash recovery)
+        env:
+          CELL_VERSION: ci
+        run: |
+          dc="docker compose -f deploy/docker-compose.yml"
+          $dc up -d --no-build --wait --wait-timeout 120
+          $dc exec -T broker cellctl health --json
+          $dc exec -T broker cellctl cmd arm move-to 0.2 -0.2 0 0 0 0
+          $dc exec -T broker cellctl stats
+          # Crash a device (SIGKILL from the host): the restart policy must bring it back.
+          sudo kill -9 "$(docker inspect -f '{{.State.Pid}}' "$($dc ps -q arm-sim)")"
+          sleep 2
+          $dc exec -T broker cellctl health --wait-healthy-ms 30000
+
+      - name: Compose logs
+        if: failure()
+        run: docker compose -f deploy/docker-compose.yml logs --no-color --tail 200
+
+      - name: Compose down
+        if: always()
+        run: docker compose -f deploy/docker-compose.yml down -v
