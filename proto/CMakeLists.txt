@@ -15,3 +15,6 @@ add_custom_command(
   COMMENT "Generating Python protobuf bindings"
   VERBATIM)
 add_custom_target(cell_proto_py ALL DEPENDS ${CELL_PROTO_PY})
+
+# Generated code is not ours to fix: keep its warnings out of the build log.
+target_compile_options(cell_proto PRIVATE -w)
