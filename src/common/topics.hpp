@@ -15,5 +15,6 @@ namespace cell::process {
 inline constexpr const char* kArmSim = "arm_sim";
 inline constexpr const char* kSensorSim = "sensor_sim";
 inline constexpr const char* kPlcBridge = "plc_bridge";
+inline constexpr const char* kPlcSim = "plc_sim";
 inline constexpr const char* kBroker = "broker";
 }  // namespace cell::process

@@ -10,10 +10,12 @@
   "command_timeout_ms": 500,
   "sub_rcvhwm": 10000,
   // Device telemetry sockets. Each also carries that process's "hb" topic.
+  // An entry without "topic" is heartbeat-only.
   "streams": [
     {"topic": "arm.joint", "endpoint": "ipc:///tmp/cell/arm.telemetry", "process": "arm_sim"},
     {"topic": "sensor.frame", "endpoint": "ipc:///tmp/cell/sensor.frames", "process": "sensor_sim"},
-    {"topic": "plc.conveyor", "endpoint": "ipc:///tmp/cell/plc.telemetry", "process": "plc_bridge"}
+    {"topic": "plc.conveyor", "endpoint": "ipc:///tmp/cell/plc.telemetry", "process": "plc_bridge"},
+    {"endpoint": "ipc:///tmp/cell/plcsim.telemetry", "process": "plc_sim"}
   ],
   // Command.target -> device REP endpoint.
   "routes": {
