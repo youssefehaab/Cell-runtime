@@ -1,0 +1,249 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# A newer commit on the same ref supersedes the run in progress.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # System packages needed to configure and build (FetchContent pulls the rest).
+  APT_BUILD_DEPS: >-
+    build-essential cmake ninja-build pkg-config git ca-certificates ccache
+    libzmq3-dev cppzmq-dev libprotobuf-dev protobuf-compiler libmodbus-dev libsystemd-dev
+  # Sanitizer runtime behaviour. Only read by instrumented binaries, so it is safe to
+  # set for every job; that also covers binaries launched by the integration tests.
+  ASAN_OPTIONS: detect_leaks=1:strict_string_checks=1:detect_stack_use_after_return=1:check_initialization_order=1
+  UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+  TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1:history_size=4:suppressions=${{ github.workspace }}/tests/tsan.supp
+
+jobs:
+  format:
+    name: format (clang-format 18)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang-format 18
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang-format-18
+
+      # scripts/format.sh calls plain `clang-format`; make that resolve to version 18
+      # regardless of what else the runner image ships, so CI matches a local run.
+      - name: Pin clang-format to 18
+        run: |
+          mkdir -p "$RUNNER_TEMP/clang-format-bin"
+          ln -sf /usr/bin/clang-format-18 "$RUNNER_TEMP/clang-format-bin/clang-format"
+          echo "$RUNNER_TEMP/clang-format-bin" >> "$GITHUB_PATH"
+
+      - name: Check formatting
+        run: |
+          clang-format --version
+          scripts/format.sh --check
+
+  build-test:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: gcc / Release
+            id: gcc-release
+            cc: gcc
+            cxx: g++
+            build_type: Release
+            sanitize: ""
+          - name: clang / Release
+            id: clang-release
+            cc: clang-18
+            cxx: clang++-18
+            build_type: Release
+            sanitize: ""
+          # ASan+UBSan on GCC and TSan on Clang: every sanitizer runs once and each
+          # compiler gets one instrumented build. TSan goes to Clang, whose runtime
+          # gives the more complete reports.
+          - name: gcc / ASan+UBSan
+            id: gcc-asan-ubsan
+            cc: gcc
+            cxx: g++
+            build_type: RelWithDebInfo
+            sanitize: address,undefined
+          - name: clang / TSan
+            id: clang-tsan
+            cc: clang-18
+            cxx: clang++-18
+            build_type: RelWithDebInfo
+            sanitize: thread
+    env:
+      CC: ${{ matrix.cc }}
+      CXX: ${{ matrix.cxx }}
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 400M
+      CELL_BIN_DIR: ${{ github.workspace }}/build/bin
+      CELL_TEST_LOG_DIR: ${{ github.workspace }}/build/test-logs
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $APT_BUILD_DEPS
+          if [[ "$CC" == clang-* ]]; then
+            sudo apt-get install -y --no-install-recommends "$CC"
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: python/requirements.txt
+
+      - name: Install Python dependencies
+        run: python -m pip install -r python/requirements.txt
+
+      # Compiler cache: covers our sources and the FetchContent dependencies, which
+      # are rebuilt with each job's own flags. Keyed per matrix entry.
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-${{ matrix.id }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ matrix.id }}-
+
+      - name: Sanitizer job settings
+        if: matrix.sanitize != ''
+        run: |
+          # Lets tests relax timing tolerances under instrumentation.
+          echo "CELL_TEST_SLOW=1" >> "$GITHUB_ENV"
+          # Sanitizer shadow mappings can collide with high-entropy ASLR on hosted runners.
+          sudo sysctl -w vm.mmap_rnd_bits=28
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DSANITIZE=${{ matrix.sanitize }} \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build
+        run: |
+          cmake --build build
+          ccache --show-stats
+
+      - name: Unit tests
+        run: ctest --test-dir build --output-on-failure --timeout 600
+
+      # tests/integration/ is filled in later; until it holds test files the step is
+      # skipped, and "no tests collected" (pytest exit code 5) is not a failure.
+      - name: Integration tests
+        env:
+          PYTHONPATH: python
+        run: |
+          if ! find tests/integration \( -name 'test_*.py' -o -name '*_test.py' \) 2>/dev/null | grep -q .; then
+            echo "::notice::no integration tests present yet; skipping"
+            exit 0
+          fi
+          rc=0
+          python -m pytest tests/integration -q --junitxml=build/integration-junit.xml || rc=$?
+          if [[ $rc -eq 5 ]]; then
+            echo "::notice::pytest collected no tests"
+            exit 0
+          fi
+          exit $rc
+
+      - name: Upload test logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-${{ matrix.id }}
+          path: |
+            build/Testing/Temporary/*.log
+            build/integration-junit.xml
+            build/test-logs/
+            build/CMakeFiles/CMakeOutput.log
+            build/CMakeFiles/CMakeError.log
+            build/CMakeFiles/CMakeConfigureLog.yaml
+          if-no-files-found: ignore
+          retention-days: 7
+
+  docker:
+    name: docker image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        run: echo "version=$(head -n1 VERSION | tr -d '[:space:]')" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/Dockerfile
+          target: runtime
+          push: false
+          load: true
+          tags: cell-runtime:ci
+          build-args: |
+            CELL_VERSION=${{ steps.version.outputs.version }}
+            VCS_REF=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Inspect image
+        run: |
+          docker image ls cell-runtime:ci
+          docker run --rm --entrypoint sh cell-runtime:ci -ec '
+            test "$(id -u)" -ne 0
+            for tool in gcc g++ cc cmake git pip; do
+              if command -v "$tool"; then
+                echo "build tool $tool leaked into the runtime image" >&2
+                exit 1
+              fi
+            done
+            ls -l /opt/cell-runtime/bin "$CELL_CONFIG_DIR"
+            for b in /opt/cell-runtime/bin/*; do
+              if ldd "$b" 2>/dev/null | grep "not found"; then
+                echo "unresolved shared library in $b" >&2
+                exit 1
+              fi
+            done
+          '
+
+      - name: Compose smoke test (full cell, command, crash recovery)
+        env:
+          CELL_VERSION: ci
+        run: |
+          dc="docker compose -f deploy/docker-compose.yml"
+          $dc up -d --no-build --wait --wait-timeout 120
+          $dc exec -T broker cellctl health --json
+          $dc exec -T broker cellctl cmd arm move-to 0.2 -0.2 0 0 0 0
+          $dc exec -T broker cellctl stats
+          # Crash a device (SIGKILL from the host): the restart policy must bring it back.
+          sudo kill -9 "$(docker inspect -f '{{.State.Pid}}' "$($dc ps -q arm-sim)")"
+          sleep 2
+          $dc exec -T broker cellctl health --wait-healthy-ms 30000
+
+      - name: Compose logs
+        if: failure()
+        run: docker compose -f deploy/docker-compose.yml logs --no-color --tail 200
+
+      - name: Compose down
+        if: always()
+        run: docker compose -f deploy/docker-compose.yml down -v

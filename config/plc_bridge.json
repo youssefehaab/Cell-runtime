@@ -4,12 +4,16 @@
   "cmd_endpoint": "ipc:///tmp/cell/plc.cmd",
   "poll_hz": 100,
   "heartbeat_interval_ms": 200,
+  // Largest conveyor speed setpoint accepted from commands, m/s (keep <= plc_sim max_speed).
+  "max_speed": 2.0,
   "modbus": {
     "host": "127.0.0.1",
     "port": 5020,
     "unit_id": 1,
-    "response_timeout_ms": 200
+    "response_timeout_ms": 100
   },
+  // Reconnect delay: initial_ms * multiplier^n capped at max_ms, each +/- jitter.
+  // Optional "seed" (integer) makes the jitter sequence reproducible.
   "backoff": {
     "initial_ms": 100,
     "max_ms": 5000,

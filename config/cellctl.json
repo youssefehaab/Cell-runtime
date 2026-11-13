@@ -1,6 +1,31 @@
 {
+  // Broker endpoints as seen from where cellctl runs.
   "broker_sub": "tcp://127.0.0.1:5556",
   "broker_cmd": "tcp://127.0.0.1:5557",
+  // Longest wait for a CommandReply (the broker's own device timeout is shorter).
   "command_timeout_ms": 2000,
-  "health_timeout_ms": 3000
+  // Longest wait for a first cell.state (health, status --once).
+  "health_timeout_ms": 3000,
+  // Longest wait for one cell.stats window (the broker publishes one per second).
+  "stats_timeout_ms": 3000,
+  // The dashboard marks its data stale when cell.state is older than this.
+  "stale_after_ms": 1000,
+  "refresh_hz": 5,
+  // Default outage length for `cellctl fault disconnect-sensor|plc-down`.
+  "fault_duration_ms": 3000,
+  // Processes of the cell, in `cellctl up` start order.
+  "processes": ["plc_sim", "arm_sim", "sensor_sim", "plc_bridge", "broker"],
+  // Local supervisor (`cellctl up`): pidfiles in run_dir, logs in run_dir/logs.
+  "run_dir": "/tmp/cell/run",
+  "bin_dir": "build/bin",
+  // Used by --mode docker (fault kill, logs).
+  "compose_file": "deploy/docker-compose.yml",
+  // Restart delay after an unexpected exit: initial * 2^n capped at max; the
+  // delay resets once a child has stayed up for backoff_reset_ms.
+  "supervisor": {
+    "backoff_initial_ms": 200,
+    "backoff_max_ms": 5000,
+    "backoff_reset_ms": 10000,
+    "stop_grace_ms": 5000
+  }
 }

@@ -1,0 +1,8 @@
+[Unit]
+Description=cell-runtime: the whole robot cell
+Documentation=https://github.com/youssefehaab/Cell-runtime
+Wants=cell-plc-sim.service cell-arm-sim.service cell-sensor-sim.service cell-plc-bridge.service cell-broker.service
+After=network.target
+
+[Install]
+WantedBy=multi-user.target
